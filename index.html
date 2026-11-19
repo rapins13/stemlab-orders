@@ -160,6 +160,7 @@ tr.cl{cursor:pointer}tr.cl:hover td{background:var(--soft)}
 .opt:hover{background:var(--soft)}.opt b{display:block}.opt span{font-size:13px;color:var(--mute)}
 .banner{background:var(--warnBg);border:1px solid rgba(240,150,63,.35);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:14px;display:none}
 .banner.on{display:block}
+.spec-cell{min-width:100px;max-width:220px;overflow-wrap:anywhere}
 .hist td{font-size:13.5px}
 .hist tr:hover td{background:var(--soft);cursor:pointer}
 .pstat{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--mute);margin-bottom:8px}
@@ -238,16 +239,16 @@ tr.cl{cursor:pointer}tr.cl:hover td{background:var(--soft)}
 
 <section class="view" id="v-log">
  <div class="filters">
-  <input class="q" id="q" placeholder="검색: 품목명, Cat#, 업체, 주문자, 비고 … (띄어쓰기로 여러 단어)">
+  <input class="q" id="q" placeholder="검색: 품목명, 규격, Cat#, 업체, 주문자, 비고 … (띄어쓰기로 여러 단어)">
   <select id="fPer"><option value="all">전체 기간</option><option value="m0">이번 달</option><option value="m1">지난 달</option><option value="d90">최근 90일</option><option value="y0">올해</option><option value="y1">작년</option><option value="cus">직접 지정</option></select>
   <select id="fV"><option value="">모든 업체</option></select>
   <select id="fP"><option value="">모든 주문자</option></select>
-  <select id="fS"><option value="">모든 상태</option><option value="nr">미수령</option><option value="pr">프로모션·샘플</option><option value="pf">증정 미수령</option></select>
+  <select id="fS"><option value="">모든 상태</option><option value="nr">미수령</option><option value="rc">수령</option><option value="pr">프로모션·샘플</option><option value="pf">증정 미수령</option></select>
  </div>
  <div class="row" id="cusRow" style="display:none;margin-bottom:10px"><input type="date" id="fFrom" style="width:auto"> ~ <input type="date" id="fTo" style="width:auto"></div>
  <div class="sumline"><span class="t" id="lTotal"></span><span class="sub" id="lCount"></span><span class="sp" style="flex:1"></span><button class="btn sm" id="bLogExp">이 결과 내보내기</button></div>
  <div class="tbl"><table class="stack" id="lt"><thead><tr>
-  <th class="s" data-k="d">주문일</th><th class="s" data-k="n">품목</th><th class="s" data-k="v">업체</th><th class="s n" data-k="q">수량</th><th class="s n" data-k="u">단가</th><th class="s n" data-k="t">총액</th><th class="s" data-k="ob">주문</th><th class="s" data-k="rd">수령</th><th>비고</th></tr></thead><tbody></tbody></table></div>
+  <th class="s" data-k="d">주문일</th><th class="s" data-k="n">품목</th><th class="s" data-k="sp">규격</th><th class="s" data-k="v">업체</th><th class="s n" data-k="q">수량</th><th class="s n" data-k="u">단가</th><th class="s n" data-k="t">총액</th><th class="s" data-k="ob">주문</th><th class="s" data-k="rd">수령</th><th>비고</th></tr></thead><tbody></tbody></table></div>
  <div class="row" style="justify-content:center;margin-top:12px"><button class="btn" id="bMore" style="display:none">더 보기</button></div>
 </section>
 
@@ -365,7 +366,7 @@ $('#bOut').onclick=async()=>{const fb=await fbReady;await fb.logout();location.r
 async function boot(){
  renderAll();
  const C=window.ORDER_APP_CONFIG||{};
- if(!C.firebase||!C.firebase.apiKey||String(C.firebase.apiKey).includes('여기')){sync('설정 필요','warn');banner('<b>config.js</b>에 Firebase 설정이 아직 없어요. 설치 안내(README)의 3단계를 따라 붙여넣어 주세요.');S.ro=true;return}
+ if(!C.firebase||!['apiKey','projectId','authDomain','appId'].every(k=>String(C.firebase[k]||'').trim()&&!String(C.firebase[k]).includes('여기'))){sync('설정 필요','warn');banner('<b>config.js</b>에 Firebase 설정이 아직 없어요. 설치 안내(README)의 3단계를 따라 붙여넣어 주세요.');S.ro=true;return}
  let fb;try{fb=await fbReady}catch(e){}
  if(!fb||fb.error){sync('연결 실패','warn');banner('Firebase에 연결하지 못했어요: '+esc(fb&&fb.error||'알 수 없음'));S.ro=true;return}
  sync('로그인 확인 중…');
@@ -373,13 +374,13 @@ async function boot(){
   if(!user){S.ro=true;sync('로그인 필요','warn');showLogin();return}
   $('#login').classList.remove('on');$('#bOut').style.display='';
   if(S.db)return;S.db=fb.db;S.ro=false;
-  let first=true;const timer=setTimeout(()=>{if(first)sync('저장소 응답이 늦어요 — 최신이 아닐 수 있어요','warn')},10000);
+  let first=true;const timer=setTimeout(()=>{if(first){sync('서버 확인 지연 — 네트워크/Firestore 상태 확인 필요','warn');banner('Firestore 서버의 첫 응답을 확인하지 못했어요. Firebase Console의 Firestore Database 생성 여부와 규칙을 확인하고, 브라우저 F12 콘솔의 오류를 확인해 주세요.')}} ,10000);
   fb.db.collection('months').onSnapshot(snap=>{
    const list=[];let has=false;for(const d of snap.docs){if(d.id[0]==='_'){if(d.id==='_people')S.cfg=d.data()||{added:[],hidden:[]};continue}has=true;S.months.add(d.id);const it=(d.data()||{}).items||{};for(const k in it)list.push({...it[k],id:k})}
    if(first&&!snap.metadata.fromCache){first=false;clearTimeout(timer);sync('실시간 동기화 중','live')}
    banner(has?'':'장부가 비어 있어요. 처음이라면 오른쪽 위 <b>엑셀 가져오기</b>로 기존 주문 기록 파일(STEM_Lab_주문기록_가져오기용.xlsx)을 한 번 올려 주세요.');
    ingest(list);
-  },e=>{clearTimeout(timer);sync(e.code==='permission-denied'?'권한 없음 — 다시 로그인':'연결 끊김 — 새로고침해 주세요','warn');if(e.code==='permission-denied')showLogin('이 계정으로는 장부를 볼 수 없어요.')});
+  },e=>{clearTimeout(timer);const code=e?.code||'unknown';sync('Firestore 오류: '+code,'warn');banner('Firestore 데이터 읽기 오류 ('+esc(code)+'): '+esc(e?.message||'오류 세부 정보 없음'));if(code==='permission-denied')showLogin('이 계정으로는 장부를 볼 수 없어요. Firestore 규칙을 확인하세요.')});
  });
 }
 
@@ -562,7 +563,7 @@ function filtered(){const q=$('#q').value.trim().toLowerCase(),toks=q.split(/\s+
  else if(per==='d90'){a=ymd(new Date(Date.now()-90*864e5))}else if(per==='y0'){a=y+'-01-01';b=y+'-12-31'}else if(per==='y1'){a=(y-1)+'-01-01';b=(y-1)+'-12-31'}
  else if(per==='cus'){a=$('#fFrom').value||'';b=$('#fTo').value||'9999'}
  const out=S.recs.filter(r=>{if(r.d<a||r.d>b)return false;if(V&&r.v!==V)return false;if(P&&r.ob!==P)return false;
-  if(st==='nr'&&r.rd)return false;if(st==='pr'&&!r.pr)return false;if(st==='pf'&&!(r.pf>0))return false;
+  if(st==='nr'&&r.rd)return false;if(st==='rc'&&!r.rd)return false;if(st==='pr'&&!r.pr)return false;if(st==='pf'&&!(r.pf>0))return false;
   if(toks.length){const h=r._h||(r._h=[r.n,r.co,r.cat,r.v,r.ob,r.rb,r.pr,r.nt,r.sp,r.d].join(' ').toLowerCase());const hn=norm(h);for(const t of toks)if(!h.includes(t)&&!hn.includes(norm(t)))return false}
   return true});
  const{k,dir}=S.sort;out.sort((x,y)=>{const A=x[k],B=y[k];const c=typeof A==='number'||typeof B==='number'?(+A||0)-(+B||0):String(A||'').localeCompare(String(B||''),'ko');return c*dir||(y.d.localeCompare(x.d))});
@@ -570,7 +571,7 @@ function filtered(){const q=$('#q').value.trim().toLowerCase(),toks=q.split(/\s+
 function renderLog(){F_IDS.forEach(id=>LS.set('f.'+id,$('#'+id).value));$('#cusRow').style.display=$('#fPer').value==='cus'?'':'none';
  const rows=filtered(),q=$('#q').value;$('#lTotal').textContent=won(sumT(rows));$('#lCount').textContent=`${rows.length.toLocaleString()}건 · 행을 누르면 수정, ↻는 같은 품목 재주문`;
  $$('#lt th.s').forEach(th=>{th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(th.dataset.k===S.sort.k?(S.sort.dir>0?' ▲':' ▼'):'')});
- $('#lt tbody').innerHTML=rows.length?rows.slice(0,S.limit).map(r=>`<tr class="cl" data-e="${esc(r.id)}"><td class="d">${esc(r.d)}</td><td>${hl(r.n,q)}${r.pr?`<span class="pill pr">${esc(r.pr)}${r.pf>0?` · ${r.pf}개 대기`:''}</span>`:''}<div class="sub">${hl([r.co,r.cat,r.sp].filter(Boolean).join(' · '),q)}</div></td><td class="nw">${hl(r.v,q)}</td><td class="n">${r.q}</td><td class="n">${won(r.u)}</td><td class="n"><b>${won(r.t)}</b></td><td>${esc(r.ob)}</td><td><div class="rc">${r.rd?`<button class="chk on" data-rcv="${esc(r.id)}" title="수령 취소" aria-label="수령 취소">✓</button><span class="sub">${md(r.rd)}<br>${esc(r.rb)}</span>`:`<button class="chk" data-rcv="${esc(r.id)}" title="수령 체크" aria-label="수령 체크"></button>`}</div></td><td>${r.nt?`<div class="sub">${hl(r.nt,q)}</div>`:''}<button class="lnk nw" data-re="${esc(r.id)}" title="같은 품목 재주문">↻ 재주문</button></td></tr>`).join(''):'<tr><td colspan="9" class="empty">조건에 맞는 주문이 없어요.</td></tr>';
+ $('#lt tbody').innerHTML=rows.length?rows.slice(0,S.limit).map(r=>`<tr class="cl" data-e="${esc(r.id)}"><td class="d" data-l="주문일">${esc(r.d)}</td><td data-l="품목">${hl(r.n,q)}${r.pr?`<span class="pill pr">${esc(r.pr)}${r.pf>0?` · ${r.pf}개 대기`:''}</span>`:''}<div class="sub">${hl([r.co,r.cat].filter(Boolean).join(' · '),q)}</div></td><td class="spec-cell" data-l="규격">${r.sp?hl(r.sp,q):'<span class="sub">—</span>'}</td><td class="nw" data-l="업체">${hl(r.v,q)}</td><td class="n" data-l="수량">${r.q}</td><td class="n" data-l="단가">${won(r.u)}</td><td class="n" data-l="총액"><b>${won(r.t)}</b></td><td data-l="주문">${esc(r.ob)}</td><td data-l="수령">${r.rd?`<div class="rc"><button class="chk on" data-rcv="${esc(r.id)}" title="수령 취소" aria-label="수령 취소">✓</button><span class="sub">${md(r.rd)}<br>${esc(r.rb)}</span></div>`:`<button class="chk" data-rcv="${esc(r.id)}" title="수령 체크" aria-label="수령 체크"></button>`}</td><td data-l="비고">${r.nt?`<div class="sub">${hl(r.nt,q)}</div>`:''}<button class="lnk nw" data-re="${esc(r.id)}" title="같은 품목 재주문">↻ 재주문</button></td></tr>`).join(''):'<tr><td colspan="10" class="empty">조건에 맞는 주문이 없어요.</td></tr>';
  $('#bMore').style.display=rows.length>S.limit?'':'none';$('#bMore').textContent=`더 보기 (${(rows.length-S.limit).toLocaleString()}건 남음)`}
 let lT;$('#q').addEventListener('input',()=>{clearTimeout(lT);lT=setTimeout(()=>{S.limit=200;renderLog()},120)});
 ['fPer','fV','fP','fS','fFrom','fTo'].forEach(id=>$('#'+id).addEventListener('change',()=>{S.limit=200;renderLog()}));
@@ -610,7 +611,21 @@ function summaryText(ym){const[y,m]=ym.split('-').map(Number),{weeks,total,rs}=m
 $('#bCopySum').onclick=async()=>{const s=summaryText(S.mon);try{await navigator.clipboard.writeText(s);toast('보고용 텍스트를 복사했어요')}catch(e){openText('보고용 텍스트',s)}};
 
 /* ---------- export / import ---------- */
-let xl=null;function loadXL(){if(window.XLSX)return Promise.resolve(window.XLSX);if(xl)return xl;xl=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=()=>ok(window.XLSX);s.onerror=()=>{xl=null;no(new Error('엑셀 모듈을 불러오지 못했어요'))};document.head.appendChild(s)});return xl}
+let xl=null;function loadXL(){
+ if(window.XLSX)return Promise.resolve(window.XLSX);if(xl)return xl;
+ xl=new Promise((ok,no)=>{
+  const urls=['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'];
+  let ix=0;
+  function attempt(){
+   if(ix>=urls.length){xl=null;no(new Error('엑셀 처리 모듈을 불러오지 못했어요. 네트워크 또는 CDN 차단 여부를 확인해 주세요.'));return}
+   const script=document.createElement('script');script.src=urls[ix++];script.async=true;let ended=false;
+   const clock=setTimeout(()=>finish(false),8000);
+   function finish(success){if(ended)return;ended=true;clearTimeout(clock);if(success&&window.XLSX){ok(window.XLSX)}else{script.remove();attempt()}}
+   script.onload=()=>finish(true);script.onerror=()=>finish(false);document.head.appendChild(script);
+  }
+  attempt();
+ });return xl;
+}
 const HEAD=['Date Ordered','product name','Company','Cat#','Quantity','규격','단가 (VAT 별도)','TOTAL PRICE (VAT 포함)','주문업체 (Vender)','Ordered by','Date Received','Received by','프로모션','증정 미수령','Note'];
 const dt=s=>s?pD(s):null;
 const rowOf=r=>[dt(r.d),r.n,r.co,r.cat,+r.q||0,r.sp,Math.round((+r.u||0)*100)/100,+r.t||0,r.v,r.ob,dt(r.rd),r.rb,r.pr,r.pf||null,r.nt];
@@ -618,7 +633,59 @@ function sheet(X,aoa,widths,dateCols=[],numCols=[]){const ws=X.utils.aoa_to_shee
  const rg=X.utils.decode_range(ws['!ref']);for(let R=1;R<=rg.e.r;R++){for(const c of dateCols){const a=ws[X.utils.encode_cell({r:R,c})];if(a&&a.t==='d')a.z='yyyy-mm-dd'}for(const c of numCols){const a=ws[X.utils.encode_cell({r:R,c})];if(a&&a.t==='n')a.z='#,##0'}}
  ws['!autofilter']={ref:ws['!ref']};return ws}
 function orderSheet(X,rs){const a=[...rs].sort((x,y)=>x.d.localeCompare(y.d)||(x.ts||0)-(y.ts||0)||String(x.id).localeCompare(String(y.id)));
- return sheet(X,[HEAD,...a.map(rowOf)],[11,46,16,16,8,12,13,15,16,10,11,10,9,9,34],[0,10],[6,7])}
+ return sheet(X,[HEAD,...a.map(rowOf)],[11,46,16,16,8,22,13,15,16,10,11,10,9,9,34],[0,10],[6,7])}
+/* A separate detail sheet makes specifications easy to find in any report.
+   It reads the same r.sp field used by the order form, log, CSV and main export. */
+function specSheet(X,rs){
+ const sorted=[...rs].sort((a,b)=>b.d.localeCompare(a.d)||(b.ts||0)-(a.ts||0));
+ const aoa=[['주문일','품목명','제조사','Cat#','규격','수량','단가 (VAT 별도)','총액 (VAT 포함)','주문업체','수령 상태'],
+  ...sorted.map(r=>[dt(r.d),r.n||'',r.co||'',r.cat||'',r.sp||'',+r.q||0,+r.u||0,+r.t||0,r.v||'',r.rd?'수령':'미수령'])];
+ return sheet(X,aoa,[12,46,18,18,22,9,16,17,21,12],[0],[6,7]);
+}
+/* Review candidates only. Never rewrite historical names or merge items automatically.
+   Same manufacturer + Cat# is a strong review signal; similar prefixes without Cat#
+   are marked as tentative and must be verified manually. */
+function nameReviewSheet(X,rs){
+ const list=new Map();
+ for(const r of rs){
+  const n=String(r.n||'').trim(),co=String(r.co||'').trim(),cat=String(r.cat||'').trim();
+  if(!n)continue;
+  const key=JSON.stringify([n,co,cat]);
+  let it=list.get(key);
+  if(!it){it={n,co,cat,sp:new Set(),count:0,last:''};list.set(key,it)}
+  if(r.sp)it.sp.add(String(r.sp).trim());
+  it.count++;if(r.d>it.last)it.last=r.d;
+ }
+ const a=[...list.values()],groups=[],used=new Set();
+ const catGroups=new Map();
+ for(let i=0;i<a.length;i++)if(a[i].cat){
+  const k=norm(a[i].co)+'|'+norm(a[i].cat);
+  if(!catGroups.has(k))catGroups.set(k,[]);catGroups.get(k).push(i);
+ }
+ for(const [key,ixs] of catGroups){
+  if(new Set(ixs.map(i=>norm(a[i].n))).size<2)continue;
+  groups.push({reason:'동일 제조사·Cat# / 명칭 상이',ixs});ixs.forEach(i=>used.add(i));
+ }
+ // For items lacking Cat#, find direct normalized-name prefix relationships.
+ // These are candidates, NOT proof that the products are identical.
+ const remaining=a.map((x,i)=>({...x,i})).filter(x=>!x.cat&&!used.has(x.i));
+ const parent=remaining.map((_,i)=>i);
+ const root=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i]}return i};
+ for(let i=0;i<remaining.length;i++)for(let j=i+1;j<remaining.length;j++){
+  const x=remaining[i],y=remaining[j],nx=norm(x.n),ny=norm(y.n),common=Math.min(nx.length,ny.length);
+  if(norm(x.co)!==norm(y.co)||common<7||nx===ny)continue;
+  if(nx.startsWith(ny)||ny.startsWith(nx))parent[root(j)]=root(i);
+ }
+ const maybe=new Map();
+ for(let i=0;i<remaining.length;i++){const k=root(i);if(!maybe.has(k))maybe.set(k,[]);maybe.get(k).push(remaining[i].i)}
+ for(const ixs of maybe.values())if(ixs.length>1)groups.push({reason:'이름 앞부분 유사 / Cat# 미기재 (확인 필요)',ixs});
+ let rows=[['검토 그룹','검토 기준','품목명 (원본)','제조사','Cat#','규격 (기록된 값)','주문 건수','최근 주문일','확정 표준명 (수동 작성)','검토 메모']];
+ groups.sort((g,h)=>h.ixs.length-g.ixs.length);
+ groups.forEach((g,gi)=>g.ixs.forEach(i=>{const it=a[i];rows.push([
+  '검토 '+(gi+1),g.reason,it.n,it.co,it.cat,[...it.sp].join(' / '),it.count,it.last,'',''
+ ])}));
+ return sheet(X,rows,[12,45,48,20,18,30,11,13,30,32],[],[6]);
+}
 function weekSheet(X,yms){const aoa=[['월','주차','기간','건수','주간 합계','월 누적']];for(const ym of yms){const{weeks}=monthData(ym);for(const w of weeks)aoa.push([ym,w.i+'주차',md(w.a)+'~'+md(w.b),w.n,w.s,w.cum])}return sheet(X,aoa,[9,7,12,7,14,14],[],[4,5])}
 function monSheet(X,yms){const aoa=[['월','건수','합계','연 누적']];let cy='',c=0;for(const ym of yms){if(ym.slice(0,4)!==cy){cy=ym.slice(0,4);c=0}const{rs,total}=monthData(ym);c+=total;aoa.push([ym,rs.length,total,c])}return sheet(X,aoa,[9,7,14,14],[],[2,3])}
 function vendSheet(X,rs){const g=group(rs,'v',999);return sheet(X,[['주문업체','합계','건수'],...g.map(([v,s])=>[v,s,rs.filter(r=>(r.v||'(미기재)')===v).length])],[24,14,7],[],[1])}
@@ -626,7 +693,7 @@ async function exportWB(kind){closeModal();let X;try{X=await loadXL()}catch(e){t
  const wb=X.utils.book_new();let rs,name;const stamp=today().replace(/-/g,'');
  if(kind==='all'){rs=S.recs;name=`STEM_Lab_Order_log_${stamp}.xlsx`}else if(kind==='filter'){rs=filtered();name=`STEM_Lab_주문검색_${stamp}.xlsx`}else{rs=S.recs.filter(r=>r.d.startsWith(S.mon));name=`STEM_Lab_주문보고_${S.mon}.xlsx`}
  const yms=[...new Set(rs.map(r=>r.d.slice(0,7)))].sort();
- X.utils.book_append_sheet(wb,orderSheet(X,rs),'Order log');X.utils.book_append_sheet(wb,weekSheet(X,yms),'주간 집계');X.utils.book_append_sheet(wb,monSheet(X,yms),'월간 집계');X.utils.book_append_sheet(wb,vendSheet(X,rs),'업체별');
+ X.utils.book_append_sheet(wb,orderSheet(X,rs),'Order log');X.utils.book_append_sheet(wb,specSheet(X,rs),'품목 규격 상세');if(kind==='all')X.utils.book_append_sheet(wb,nameReviewSheet(X,rs),'품목명 정리 후보');X.utils.book_append_sheet(wb,weekSheet(X,yms),'주간 집계');X.utils.book_append_sheet(wb,monSheet(X,yms),'월간 집계');X.utils.book_append_sheet(wb,vendSheet(X,rs),'업체별');
  const buf=X.write(wb,{type:'array',bookType:'xlsx'});await save(name,new Blob([buf]),`${rs.length.toLocaleString()}건`)}
 async function exportCSV(){closeModal();const esc2=v=>{v=v instanceof Date?ymd(v):v??'';v=String(v);return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
  const s='\ufeff'+[HEAD,...[...S.recs].reverse().map(rowOf)].map(r=>r.map(esc2).join(',')).join('\n');await save(`STEM_Lab_Order_log_${today().replace(/-/g,'')}.csv`,s,'CSV')}
@@ -636,9 +703,9 @@ function openModal(html){$('#mbox').innerHTML=html;$('#modal').classList.add('on
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal'||e.target.closest('[data-close]'))closeModal();const o=e.target.closest('[data-x]');if(o){const k=o.dataset.x;k==='csv'?exportCSV():exportWB(k)}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 $('#bExport').onclick=()=>openModal(`<h3>내보내기</h3>
- <button class="opt" data-x="all"><div><b>전체 기록 (.xlsx)</b><span>${S.recs.length.toLocaleString()}건 · 기존 엑셀과 같은 열 순서 + 주간·월간·업체별 집계 시트</span></div></button>
- <button class="opt" data-x="month"><div><b>${S.mon.replace('-','년 ')}월 보고서 (.xlsx)</b><span>그 달 주문 + 주차별 합계·누적 (집계 탭에서 달을 바꿀 수 있어요)</span></div></button>
- <button class="opt" data-x="filter"><div><b>현재 검색 결과 (.xlsx)</b><span>기록·검색 탭의 검색어·필터 그대로 ${filtered().length.toLocaleString()}건</span></div></button>
+ <button class="opt" data-x="all"><div><b>전체 기록 (.xlsx)</b><span>${S.recs.length.toLocaleString()}건 · 원본 규격 열 + 품목 규격 상세 + 품목명 정리 후보 + 집계 시트</span></div></button>
+ <button class="opt" data-x="month"><div><b>${S.mon.replace('-','년 ')}월 보고서 (.xlsx)</b><span>그 달 주문 + 품목·규격 상세 내역 + 주차별 합계·누적</span></div></button>
+ <button class="opt" data-x="filter"><div><b>현재 검색 결과 (.xlsx)</b><span>검색어·필터 그대로 ${filtered().length.toLocaleString()}건 (규격 열 포함)</span></div></button>
  <button class="opt" data-x="csv"><div><b>전체 기록 (.csv)</b><span>다른 프로그램용</span></div></button>
  <div class="row" style="justify-content:flex-end"><button class="btn" data-close>닫기</button></div>`);
 $$('#bLogExp').forEach(b=>b.onclick=()=>exportWB('filter'));$('#bMonExp').onclick=()=>exportWB('month');
@@ -690,7 +757,7 @@ try{
  const app=initializeApp(C.firebase),fs=F.getFirestore(app),auth=A.getAuth(app);
  const snapOf=d=>({id:d.id,exists:d.exists(),data:()=>d.data(),metadata:d.metadata});
  const ref=p=>{const r=F.doc(fs,p);return{get:async()=>snapOf(await F.getDoc(r)),set:d=>F.setDoc(r,d),update:d=>F.setDoc(r,d,{merge:true})}};
- const db={doc:ref,collection:c=>({onSnapshot:(next,err)=>F.onSnapshot(F.collection(fs,c),{includeMetadataChanges:false},q=>next({docs:q.docs.map(snapOf),empty:q.empty,size:q.size,metadata:q.metadata}),err)})};
+ const db={doc:ref,collection:c=>({onSnapshot:(next,err)=>F.onSnapshot(F.collection(fs,c),{includeMetadataChanges:true},q=>next({docs:q.docs.map(snapOf),empty:q.empty,size:q.size,metadata:q.metadata}),err)})};
  window.__fbResolve({db,onAuth:cb=>A.onAuthStateChanged(auth,cb),login:pw=>A.signInWithEmailAndPassword(auth,C.labEmail,pw),logout:()=>A.signOut(auth)});
 }catch(e){window.__fbResolve({error:e.message||String(e)})}
 </script>
