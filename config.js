@@ -3,11 +3,11 @@
 window.ORDER_APP_CONFIG = {
   firebase: {
     apiKey: "AIzaSyAgsNumfweEMUXtwSXAvWKtLZDbmWv9GVY",
-    authDomain: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
+    authDomain: "stem-lab-order.firebaseapp.com",
+    projectId: "stem-lab-order",
+    storageBucket: "stem-lab-order.firebasestorage.app",
+    messagingSenderId: "722280588272",
+    appId: "1:722280588272:web:b3967d595b4c4553d5b335"
   },
   // Firebase Authentication에서 만든 랩 공용 계정 이메일 (보안 규칙의 이메일과 같아야 합니다)
   labEmail: "lab@kimstemlab.com"
